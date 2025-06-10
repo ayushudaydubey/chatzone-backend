@@ -5,6 +5,8 @@ export async function messageController(req, res) {
   const { senderId, receiverId, message } = req.body;
 
   try {
+
+    
     const newMessage = await messageModel.create({
       senderId,
       receiverId,
