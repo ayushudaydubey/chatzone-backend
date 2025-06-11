@@ -58,6 +58,7 @@ app.use(cors({
 app.use(express.json())
 app.use(cookieParser())
 
+// incoming request------->
 app.use((req, res, next) => {
   console.log('Incoming Origin:', req.headers.origin)
   next()
@@ -66,9 +67,10 @@ app.use((req, res, next) => {
 
 
 // Home route
-app.get("/", (req, res) => {
-  res.send("Home")
+app.get("/", (req, res)  =>  {
+  res.send("Home page ")
 })
+
 
 // File upload endpoint
 app.post("/user/upload-file", upload.single('file'), async (req, res) => {
