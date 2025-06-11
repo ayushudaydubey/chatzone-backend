@@ -16,12 +16,20 @@ import userModel from './src/Models/users.models.js'
 const app = express()
 const server = createServer(app)
 
+app.options('*', cors({
+  origin: ['http://localhost:5173','https://chatzone-frontend.vercel.app'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+}))
+
 // Initialize Socket.IO FIRST
 const io = new Server(server, {
   cors: {
     origin: ['http://localhost:5173','https://chatzone-frontend.vercel.app'],
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
   }
 })
 
@@ -52,7 +60,10 @@ const upload = multer({
 // CORS setup
 app.use(cors({
   origin: ['http://localhost:5173','https://chatzone-frontend.vercel.app'],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  optionsSuccessStatus: 200 // For legacy browser support
 }))
 
 app.use(express.json())

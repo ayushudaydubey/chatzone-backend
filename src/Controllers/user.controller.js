@@ -22,7 +22,6 @@ export async function registerUserController(req, res) {
       return res.status(400).json({ error: "User already exists with this username." });
     }
 
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await userModel.create({
@@ -40,12 +39,11 @@ export async function registerUserController(req, res) {
       { expiresIn: '7d' } // Extended to 7 days for better UX
     );
 
-    // Set token in cookie
+    // Set token in cookie - FIXED: Consistent settings for production
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-     sameSite: 'None',
-
+      secure: process.env.NODE_ENV === 'production', // true in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'lax', // None for cross-origin in production
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/'
     });
@@ -101,12 +99,13 @@ export async function loginUserController(req, res) {
       { expiresIn: "7d" } // Extended to 7 days
     );
 
-    // Set token in cookie
+    // Set token in cookie - FIXED: Consistent settings for production
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production", // true in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'lax', // None for cross-origin in production
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/'
     });
 
     // Send response
@@ -127,14 +126,22 @@ export async function loginUserController(req, res) {
 
 // Example using Express.js
 export const getMeController =  async(req, res) => {
-  // Sample logic: verify session or JWT
-  if (req.user) {
-    res.status(200).json({ name: req.user.name });
-  } else {
-    res.status(401).json({ message: 'Unauthorized' });
+  try {
+    // Sample logic: verify session or JWT
+    if (req.user) {
+      res.status(200).json({ 
+        name: req.user.name,
+        id: req.user.id,
+        email: req.user.email 
+      });
+    } else {
+      res.status(401).json({ message: 'Unauthorized' });
+    }
+  } catch (error) {
+    console.error("getMeController error:", error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 }
-
 
 // Logout Controller
 export const logoutUserController = async (req, res) => {
@@ -147,11 +154,11 @@ export const logoutUserController = async (req, res) => {
       });
     }
 
-    // Clear the HTTP-only cookie containing the JWT token
+    // Clear the HTTP-only cookie containing the JWT token - FIXED: Consistent settings
     res.clearCookie('token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'lax',
       path: '/'
     });
 
@@ -168,10 +175,13 @@ export const logoutUserController = async (req, res) => {
   }
 };
 
-// Middleware to Verify JWT Token from Cookie
+// Middleware to Verify JWT Token from Cookie - ENHANCED ERROR HANDLING
 export async function verifyTokenMiddleware(req, res, next) {
   try {
     const token = req.cookies['token'];
+    
+    console.log("Token from cookies:", token ? "Present" : "Missing"); // Debug log
+    console.log("All cookies:", req.cookies); // Debug log
     
     if (!token) {
       return res.status(401).json({ error: "Access denied. No token provided." });
@@ -195,6 +205,7 @@ export async function verifyTokenMiddleware(req, res, next) {
     
     next();
   } catch (err) {
+    console.error("Token verification error:", err); // Enhanced error logging
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({ error: "Token expired" });
     }
