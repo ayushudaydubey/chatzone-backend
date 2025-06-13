@@ -180,8 +180,7 @@ export async function verifyTokenMiddleware(req, res, next) {
   try {
     const token = req.cookies['token'];
     
-    console.log("Token from cookies:", token ? "Present" : "Missing"); // Debug log
-    console.log("All cookies:", req.cookies); // Debug log
+   
     
     if (!token) {
       return res.status(401).json({ error: "Access denied. No token provided." });

@@ -16,15 +16,12 @@ import userModel from './src/Models/users.models.js'
 const app = express()
 const server = createServer(app)
 
-
-
 // Initialize Socket.IO FIRST
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:5173','https://chatzone-frontend.vercel.app'],
+    origin: ['http://localhost:5173','https://chatzone-pi.vercel.app'],
     methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+    credentials: true
   }
 })
 
@@ -54,29 +51,17 @@ const upload = multer({
 
 // CORS setup
 app.use(cors({
-  origin: ['http://localhost:5173','https://chatzone-frontend.vercel.app'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-  optionsSuccessStatus: 200 // For legacy browser support
+  origin: ['http://localhost:5173','https://chatzone-pi.vercel.app'],
+  credentials: true
 }))
 
 app.use(express.json())
 app.use(cookieParser())
 
-// incoming request------->
-app.use((req, res, next) => {
-  console.log('Incoming Origin:', req.headers.origin)
-  next()
-})
-
-
-
 // Home route
-app.get("/", (req, res)  =>  {
-  res.send("Home page ")
+app.get("/", (req, res) => {
+  res.send("Home")
 })
-
 
 // File upload endpoint
 app.post("/user/upload-file", upload.single('file'), async (req, res) => {

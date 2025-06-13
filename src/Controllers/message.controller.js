@@ -1,177 +1,191 @@
 import messageModel from "../Models/chat.models.js";
 import { generateAIResponse } from "../Services/ai.service.js";
 
-export async function messageController(req, res) {
-  const { senderId, receiverId, message } = req.body;
-
+// Save regular messages (HTTP endpoint)
+export const messageController = async (req, res) => {
   try {
+    const { fromUser, toUser, message, messageType = 'text', fileInfo, timestamp, isAiBot = false } = req.body;
 
-    
-    const newMessage = await messageModel.create({
-      senderId,
-      receiverId,
-      message
-    });
-
-    res.status(200).json({
-      message: 'success',
-      newMessage
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to store message", error: error.message });
-  }
-}
-
-export const getAiMessagesController = async (req, res) => {
-  try {
-    const { userId } = req.query;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID is required"
-      });
-    }
-
-    // Find AI conversation messages using standard MongoDB query
-    // Assuming AI bot has a specific identifier like 'ai-bot' or similar
-    const aiMessages = await messageModel.find({
-      $or: [
-        { senderId: userId, receiverId: 'ai-bot' },
-        { senderId: 'ai-bot', receiverId: userId },
-        { fromUser: userId, toUser: 'ai-bot' },
-        { fromUser: 'ai-bot', toUser: userId },
-        { messageType: 'ai-chat', $or: [{ senderId: userId }, { receiverId: userId }, { fromUser: userId }, { toUser: userId }] }
-      ]
-    }).sort({ createdAt: 1, timestamp: 1, timeStamp: 1 });
-
-    // Transform messages to match frontend expectations
-    const transformedMessages = aiMessages.map(msg => ({
-      fromUser: msg.fromUser || msg.senderId,
-      toUser: msg.toUser || msg.receiverId,
-      message: msg.message,
-      timestamp: msg.timestamp || msg.timeStamp || msg.createdAt,
-      isAiBot: msg.isAiBot || msg.senderId === 'ai-bot' || msg.fromUser === 'ai-bot',
-      isError: msg.isError || false,
-      isRead: msg.isRead || false,
-      _id: msg._id
-    }));
-
-    res.status(200).json(transformedMessages);
-
-  } catch (error) {
-    console.error("Error fetching AI messages:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch AI messages"
-    });
-  }
-};
-
-// Helper function to save messages
-async function saveMessage(messageData) {
-  return await messageModel.create(messageData);
-}
-
-// AI message save controller - Backend to save AI response
-export const aiMessageSaveController = async (req, res) => {
-  try {
-    const { fromUser, toUser, message, timestamp, isAiBot, isError } = req.body;
-    
-    // Validate required fields
     if (!fromUser || !toUser || !message) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields: fromUser, toUser, message"
+        error: "Missing required fields: fromUser, toUser, message",
       });
     }
 
-    // Create AI message object using the unified schema
-    const aiMessage = {
-      senderId: fromUser,
-      receiverId: toUser,
-      fromUser: fromUser,
-      toUser: toUser,
+    const messageData = {
+      senderId: fromUser, // For backward compatibility
+      receiverId: toUser, // For backward compatibility
+      fromUser,
+      toUser,
       message,
-      timeStamp: timestamp ? new Date(timestamp) : new Date(),
+      messageType,
+      fileInfo: fileInfo || null,
       timestamp: timestamp ? new Date(timestamp) : new Date(),
-      messageType: 'ai-chat',
-      isAiBot: isAiBot || false,
-      isError: isError || false,
-      isRead: false // AI messages start as unread
+      timeStamp: timestamp ? new Date(timestamp) : new Date(), // For backward compatibility
+      isAiBot,
+      isError: false,
+      isRead: fromUser === toUser, // Mark as read if sender is receiver (e.g., AI chat)
     };
 
-    // Save to database
-    const savedMessage = await messageModel.create(aiMessage);
-    
+    const newMessage = await messageModel.create(messageData);
+
     res.status(201).json({
       success: true,
-      message: "AI message saved successfully",
-      data: savedMessage
+      message: "Message saved successfully",
+      data: newMessage,
     });
-
   } catch (error) {
-    console.error("Error saving AI message:", error);
+    console.error("Error in messageController:", error.message, error.stack);
     res.status(500).json({
       success: false,
-      error: "Failed to save AI message"
+      error: "Failed to store message",
+      details: error.message,
     });
   }
 };
 
-// Controller to get messages between two users
+// Save AI messages (HTTP endpoint for AI chats)
+export const aiMessageSaveController = async (req, res) => {
+  try {
+    const { fromUser, toUser, message, timestamp, isAiBot = false, isError = false } = req.body;
+
+    if (!fromUser || !toUser || !message) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: fromUser, toUser, message",
+      });
+    }
+
+    const messageData = {
+      senderId: fromUser,
+      receiverId: toUser,
+      fromUser,
+      toUser,
+      message,
+      messageType: 'ai-chat',
+      timestamp: timestamp ? new Date(timestamp) : new Date(),
+      timeStamp: timestamp ? new Date(timestamp) : new Date(),
+      isAiBot,
+      isError,
+      isRead: false,
+    };
+
+    const savedMessage = await messageModel.create(messageData);
+
+    res.status(201).json({
+      success: true,
+      message: "AI message saved successfully",
+      data: savedMessage,
+    });
+  } catch (error) {
+    console.error("Error in aiMessageSaveController:", error.message, error.stack);
+    res.status(500).json({
+      success: false,
+      error: "Failed to save AI message",
+      details: error.message,
+    });
+  }
+};
+
+// Get AI messages
+export const getAiMessagesController = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required",
+      });
+    }
+
+    const aiMessages = await messageModel
+      .find({
+        messageType: 'ai-chat',
+        $or: [
+          { senderId: userId, receiverId: 'Elva Ai' },
+          { senderId: 'Elva Ai', receiverId: userId },
+          { fromUser: userId, toUser: 'Elva Ai' },
+          { fromUser: 'Elva Ai', toUser: userId },
+        ],
+      })
+      .sort({ timestamp: 1 })
+      .lean();
+
+    console.log(`Fetched ${aiMessages.length} AI messages for user: ${userId}`);
+
+    const transformedMessages = aiMessages.map(msg => ({
+      fromUser: msg.fromUser || msg.senderId || userId,
+      toUser: msg.toUser || msg.receiverId || 'Elva Ai',
+      message: msg.message,
+      timestamp: msg.timestamp || msg.timeStamp || msg.createdAt,
+      messageType: msg.messageType || 'ai-chat',
+      isAiBot: msg.isAiBot || msg.senderId === 'Elva Ai' || msg.fromUser === 'Elva Ai',
+      isError: msg.isError || false,
+      isRead: msg.isRead || false,
+      _id: msg._id,
+    }));
+
+    res.status(200).json(transformedMessages);
+  } catch (error) {
+    console.error("Error in getAiMessagesController:", error.message, error.stack);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch AI messages",
+      details: error.message,
+    });
+  }
+};
+
+// Get messages between two users
+// Example fix for your getMessagesController in message.controller.js
+
 export const getMessagesController = async (req, res) => {
   try {
-    const { senderId, receiverId } = req.query;
+    const { senderId, receiverId } = req.params;
+    
+    console.log('Fetching messages between:', senderId, 'and', receiverId);
     
     if (!senderId || !receiverId) {
       return res.status(400).json({
         success: false,
-        error: "Both senderId and receiverId are required"
+        error: 'SenderId and receiverId are required'
       });
     }
 
-    // Find conversation between two users using standard MongoDB query
+    // Fetch messages between the two users
     const messages = await messageModel.find({
       $or: [
-        { senderId: senderId, receiverId: receiverId },
-        { senderId: receiverId, receiverId: senderId },
         { fromUser: senderId, toUser: receiverId },
         { fromUser: receiverId, toUser: senderId }
       ]
-    }).sort({ createdAt: 1, timestamp: 1, timeStamp: 1 });
+    }).sort({ timestamp: 1 }); // Sort by timestamp ascending
 
-    // Transform messages to match frontend expectations
-    const transformedMessages = messages.map(msg => ({
-      fromUser: msg.fromUser || msg.senderId,
-      toUser: msg.toUser || msg.receiverId,
-      message: msg.message,
-      timestamp: msg.timestamp || msg.timeStamp || msg.createdAt,
-      messageType: msg.messageType || 'text',
-      fileInfo: msg.fileInfo,
-      isRead: msg.isRead || false,
-      _id: msg._id
-    }));
+    console.log(`Found ${messages.length} messages`);
 
-    res.status(200).json(transformedMessages);
+    // Return messages directly as an array (not wrapped in an object)
+    // This matches what your frontend expects
+    return res.status(200).json(messages);
 
   } catch (error) {
-    console.error("Error fetching messages:", error);
-    res.status(500).json({
+    console.error('Error fetching messages:', error);
+    return res.status(500).json({
       success: false,
-      error: "Failed to fetch messages"
+      error: 'Internal server error'
     });
   }
 };
 
+// Get unread messages and last messages
 export const getUnreadMessagesController = async (req, res) => {
   try {
     const { username } = req.query;
-    
+
     if (!username) {
       return res.status(400).json({
         success: false,
-        error: "Username is required"
+        error: "Username is required",
       });
     }
 
@@ -180,11 +194,10 @@ export const getUnreadMessagesController = async (req, res) => {
     const unreadMessages = await messageModel.find({
       $or: [
         { receiverId: username, isRead: false },
-        { toUser: username, isRead: false }
-      ]
-    });
+        { toUser: username, isRead: false },
+      ],
+    }).lean();
 
-    // Count unread messages by sender
     unreadMessages.forEach(msg => {
       const sender = msg.senderId || msg.fromUser;
       if (sender && sender !== username) {
@@ -201,9 +214,9 @@ export const getUnreadMessagesController = async (req, res) => {
             { senderId: username },
             { receiverId: username },
             { fromUser: username },
-            { toUser: username }
-          ]
-        }
+            { toUser: username },
+          ],
+        },
       },
       {
         $addFields: {
@@ -211,23 +224,23 @@ export const getUnreadMessagesController = async (req, res) => {
             $cond: {
               if: { $eq: [{ $ifNull: ["$senderId", "$fromUser"] }, username] },
               then: { $ifNull: ["$receiverId", "$toUser"] },
-              else: { $ifNull: ["$senderId", "$fromUser"] }
-            }
+              else: { $ifNull: ["$senderId", "$fromUser"] },
+            },
           },
           sortTimestamp: {
-            $ifNull: ["$timestamp", { $ifNull: ["$timeStamp", "$createdAt"] }]
-          }
-        }
+            $ifNull: ["$timestamp", { $ifNull: ["$timeStamp", "$createdAt"] }],
+          },
+        },
       },
       {
-        $sort: { sortTimestamp: -1 }
+        $sort: { sortTimestamp: -1 },
       },
       {
         $group: {
           _id: "$otherUser",
-          lastMessage: { $first: "$$ROOT" }
-        }
-      }
+          lastMessage: { $first: "$$ROOT" },
+        },
+      },
     ]);
 
     allConversations.forEach(item => {
@@ -236,7 +249,8 @@ export const getUnreadMessagesController = async (req, res) => {
         lastMessages[item._id] = {
           message: msg.message,
           timestamp: msg.timestamp || msg.timeStamp || msg.createdAt,
-          isFile: msg.messageType === 'file'
+          isFile: msg.messageType === 'file',
+          messageType: msg.messageType || 'text',
         };
       }
     });
@@ -244,95 +258,124 @@ export const getUnreadMessagesController = async (req, res) => {
     res.status(200).json({
       success: true,
       unreadCounts,
-      lastMessages
+      lastMessages,
     });
-
   } catch (error) {
-    console.error("Error fetching unread messages:", error);
+    console.error("Error in getUnreadMessagesController:", error.message, error.stack);
     res.status(500).json({
       success: false,
-      error: "Failed to fetch unread messages"
+      error: "Failed to fetch unread messages",
+      details: error.message,
     });
   }
 };
 
+// Mark messages as read
 export const markMessagesAsReadController = async (req, res) => {
   try {
     const { senderId, receiverId } = req.body;
-    
+
     if (!senderId || !receiverId) {
       return res.status(400).json({
         success: false,
-        error: "Both senderId and receiverId are required"
+        error: "Both senderId and receiverId are required",
       });
     }
 
-    // Mark messages as read using standard MongoDB update
     const result = await messageModel.updateMany(
       {
         $or: [
-          { senderId: senderId, receiverId: receiverId },
-          { fromUser: senderId, toUser: receiverId }
+          { senderId: senderId, receiverId: receiverId, isRead: false },
+          { fromUser: senderId, toUser: receiverId, isRead: false },
         ],
-        isRead: false
       },
-      {
-        $set: { isRead: true }
-      }
+      { $set: { isRead: true } }
     );
+
+    console.log(`Marked ${result.modifiedCount} messages as read from ${senderId} to ${receiverId}`);
 
     res.status(200).json({
       success: true,
       message: "Messages marked as read",
-      modifiedCount: result.modifiedCount
+      modifiedCount: result.modifiedCount,
     });
-
   } catch (error) {
-    console.error("Error marking messages as read:", error);
+    console.error("Error in markMessagesAsReadController:", error.message, error.stack);
     res.status(500).json({
       success: false,
-      error: "Failed to mark messages as read"
+      error: "Failed to mark messages as read",
+      details: error.message,
     });
   }
 };
 
-// Controller to save regular messages (for socket.io messages)
+// Save regular messages (for Socket.IO or HTTP)
+
+// Save regular messages (for Socket.IO or HTTP)
+// Save regular messages (for Socket.IO or HTTP)
 export const saveMessageController = async (req, res) => {
   try {
-    const { fromUser, toUser, message, messageType = 'text', fileInfo } = req.body;
+    const { fromUser, toUser, message, timestamp, messageType = 'text', fileInfo, isAiBot = false } = req.body;
     
+    // Validate required fields
     if (!fromUser || !toUser || !message) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields"
+        error: 'Missing required fields: fromUser, toUser, message'
       });
     }
 
+    // Create message data object with all required fields
     const messageData = {
+      // Required fields for schema validation
       senderId: fromUser,
       receiverId: toUser,
-      fromUser: fromUser,
-      toUser: toUser,
       message,
+      
+      // Optional/additional fields
       messageType,
-      fileInfo: fileInfo || undefined,
-      timeStamp: new Date(),
-      timestamp: new Date(),
-      isRead: false
+      fileInfo: fileInfo || null,
+      timestamp: timestamp ? new Date(timestamp) : new Date(),
+      timeStamp: timestamp ? new Date(timestamp) : new Date(),
+      isAiBot,
+      isError: false,
+      isRead: false,
+      
+      // Backward compatibility fields
+      fromUser,
+      toUser
     };
 
+    // Save to database
     const savedMessage = await messageModel.create(messageData);
     
     res.status(201).json({
       success: true,
+      message: 'Message saved successfully',
       data: savedMessage
     });
 
   } catch (error) {
-    console.error("Error saving message:", error);
+    console.error('Error saving message:', error);
     res.status(500).json({
       success: false,
-      error: "Failed to save message"
+      error: 'Failed to save message',
+      details: error.message
     });
   }
 };
+
+// Helper function to save messages
+export async function saveMessage(messageData) {
+  try {
+    const savedMessage = await messageModel.create({
+      ...messageData,
+      timestamp: messageData.timestamp ? new Date(messageData.timestamp) : new Date(),
+      timeStamp: messageData.timestamp ? new Date(messageData.timestamp) : new Date(),
+    });
+    return savedMessage;
+  } catch (error) {
+    console.error("Error in saveMessage helper:", error.message, error.stack);
+    throw error;
+  }
+}

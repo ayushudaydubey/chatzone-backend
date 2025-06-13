@@ -42,8 +42,8 @@ routes.get("/ai-messages", verifyTokenMiddleware, getAiMessagesController);
 routes.get("/auth/me", verifyTokenMiddleware, getMeController);
 routes.get("/all-users", verifyTokenMiddleware, getAllUsersController);
 
-// Regular Message Routes  
-
+// Regular Message Routes - FIXED: Proper route ordering
+// Specific routes first, then general ones
 routes.get("/chat/:senderId/:receiverId", verifyTokenMiddleware, getMessagesController);
 routes.post("/save-message", verifyTokenMiddleware, saveMessageController);
 
