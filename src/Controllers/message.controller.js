@@ -2,30 +2,60 @@ import messageModel from "../Models/chat.models.js";
 import { generateAIResponse } from "../Services/ai.service.js";
 
 // Save regular messages (HTTP endpoint)
+
+
 export const messageController = async (req, res) => {
   try {
-    const { fromUser, toUser, message, messageType = 'text', fileInfo, timestamp, isAiBot = false } = req.body;
+    const {
+      fromUser,
+      toUser,
+      message,
+      messageType = 'text',
+      fileInfo,
+      timestamp,
+      isAiBot = false
+    } = req.body;
 
     if (!fromUser || !toUser || !message) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields: fromUser, toUser, message",
+        error: "Missing required fields: fromUser, toUser, message"
+      });
+    }
+
+    if (messageType === 'file' && (!fileInfo || typeof message !== 'string')) {
+      return res.status(400).json({
+        success: false,
+        error: "fileInfo and a valid string message (URL) are required for file messages"
+      });
+    }
+
+    const now = timestamp ? new Date(timestamp) : new Date();
+    const messageId = `${fromUser}-${toUser}-${now.getTime()}-${message.slice(0, 50)}`;
+
+    const existingMessage = await messageModel.findOne({ _id: messageId });
+    if (existingMessage) {
+      return res.status(200).json({
+        success: true,
+        message: "Message already exists",
+        data: existingMessage
       });
     }
 
     const messageData = {
-      senderId: fromUser, // For backward compatibility
-      receiverId: toUser, // For backward compatibility
+      _id: messageId,
+      senderId: fromUser,
+      receiverId: toUser,
       fromUser,
       toUser,
       message,
       messageType,
       fileInfo: fileInfo || null,
-      timestamp: timestamp ? new Date(timestamp) : new Date(),
-      timeStamp: timestamp ? new Date(timestamp) : new Date(), // For backward compatibility
+      timestamp: now,
+      timeStamp: now,
       isAiBot,
       isError: false,
-      isRead: fromUser === toUser, // Mark as read if sender is receiver (e.g., AI chat)
+      isRead: fromUser === toUser || isAiBot
     };
 
     const newMessage = await messageModel.create(messageData);
@@ -33,17 +63,29 @@ export const messageController = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Message saved successfully",
-      data: newMessage,
+      data: {
+        _id: newMessage._id,
+        fromUser: newMessage.fromUser,
+        toUser: newMessage.toUser,
+        message: newMessage.message,
+        messageType: newMessage.messageType,
+        fileInfo: newMessage.fileInfo,
+        timestamp: newMessage.timestamp,
+        isAiBot: newMessage.isAiBot,
+        isRead: newMessage.isRead
+      }
     });
   } catch (error) {
     console.error("Error in messageController:", error.message, error.stack);
     res.status(500).json({
       success: false,
       error: "Failed to store message",
-      details: error.message,
+      details: error.message
     });
   }
 };
+
+
 
 // Save AI messages (HTTP endpoint for AI chats)
 export const aiMessageSaveController = async (req, res) => {
