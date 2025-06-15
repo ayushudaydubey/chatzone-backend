@@ -64,39 +64,158 @@ app.get("/", (req, res) => {
 })
 
 // File upload endpoint
-app.post("/user/upload-file", upload.single('file'), async (req, res) => {
+app.get("/user/messages", async (req, res) => {
   try {
-    console.log('File upload request received')
-    console.log('File:', req.file ? req.file.originalname : 'No file')
-    console.log('Body:', req.body)
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' })
-    }
-
-    const { senderId, receiverId } = req.body
+    const { senderId, receiverId } = req.query
     
     if (!senderId || !receiverId) {
-      return res.status(400).json({ error: 'senderId and receiverId are required' })
+      return res.status(400).json({ error: "senderId and receiverId are required" })
     }
 
-    console.log('Uploading to ImageKit...')
+    console.log(`🔍 Loading messages between ${senderId} and ${receiverId}`)
+
+    const messages = await messageModel.find({
+      $or: [
+        { senderId, receiverId },
+        { senderId: receiverId, receiverId: senderId }
+      ]
+    }).sort({ timeStamp: 1 })
+
+    console.log(`📨 Found ${messages.length} messages in database`)
+
+    // ✅ FIXED: Properly format ALL messages including files
+    const formattedMessages = messages.map(msg => {
+      const formattedMsg = {
+        _id: msg._id,
+        fromUser: msg.senderId,        // ✅ Always use senderId as fromUser
+        toUser: msg.receiverId,        // ✅ Always use receiverId as toUser  
+        message: msg.message,
+        messageType: msg.messageType || 'text',
+        timestamp: msg.timeStamp,
+        isRead: msg.isRead
+      }
+
+      // ✅ CRITICAL FIX: Include fileInfo for file messages
+      if (msg.messageType === 'file' && msg.fileInfo) {
+        formattedMsg.fileInfo = {
+          fileName: msg.fileInfo.fileName,
+          fileSize: msg.fileInfo.fileSize,
+          mimeType: msg.fileInfo.mimeType,
+          imageKitFileId: msg.fileInfo.imageKitFileId
+        }
+        console.log(`📎 File message formatted:`, {
+          fileName: msg.fileInfo.fileName,
+          url: msg.message
+        })
+      }
+
+      return formattedMsg
+    })
+
+    console.log(`✅ Returning ${formattedMessages.length} formatted messages`)
+    console.log(`📋 Sample message:`, formattedMessages[0])
+
+    res.json({
+      success: true,
+      messages: formattedMessages  // ✅ Wrap in success object
+    })
+
+  } catch (err) {
+    console.error('❌ Error fetching messages:', err)
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch messages',
+      details: err.message 
+    })
+  }
+})
+app.get("/user/chat/:user1/:user2", async (req, res) => {
+  try {
+    const { user1, user2 } = req.params
     
+    console.log(`🔍 Chat history requested: ${user1} <-> ${user2}`)
+
+    const messages = await messageModel.find({
+      $or: [
+        { senderId: user1, receiverId: user2 },
+        { senderId: user2, receiverId: user1 }
+      ]
+    }).sort({ timeStamp: 1 })
+
+    const formattedMessages = messages.map(msg => ({
+      _id: msg._id,
+      fromUser: msg.senderId,
+      toUser: msg.receiverId,
+      message: msg.message,
+      messageType: msg.messageType || 'text',
+      fileInfo: msg.fileInfo || null,
+      timestamp: msg.timeStamp,
+      isRead: msg.isRead
+    }))
+
+    console.log(`✅ Chat history loaded: ${formattedMessages.length} messages`)
+
+    res.json({
+      success: true,
+      messages: formattedMessages
+    })
+
+  } catch (error) {
+    console.error('❌ Error in chat history:', error)
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to load chat history' 
+    })
+  }
+})
+// Get all registered users
+app.get("/user/all-users", async (req, res) => {
+  try {
+    const allUsers = await userModel.find({}, { name: 1, email: 1, _id: 0 })
+    const userList = allUsers.map(user => user.name)
+    res.json(userList)
+  } catch (error) {
+    console.error('Error fetching all users:', error)
+    res.status(500).json({ error: 'Failed to fetch users' })
+  }
+})
+// Add this endpoint to your backend server code (paste-2.txt)
+// Place it with your other routes, before the socket.io connection handling
+
+app.post("/user/upload-file", upload.single('file'), async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.body
+    
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "No file uploaded" 
+      })
+    }
+
+    if (!senderId || !receiverId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "senderId and receiverId are required" 
+      })
+    }
+
+    console.log(`📎 File upload: ${req.file.originalname} from ${senderId} to ${receiverId}`)
+
     // Upload to ImageKit
     const uploadResponse = await imagekit.upload({
       file: req.file.buffer,
-      fileName: `${Date.now()}_${req.file.originalname}`,
-      folder: '/chat-files',
-      useUniqueFileName: true,
+      fileName: req.file.originalname,
+      folder: "/chat-files"
     })
 
-    console.log('ImageKit upload successful:', uploadResponse.url)
+    console.log(`✅ ImageKit upload successful: ${uploadResponse.url}`)
 
-    // Save file message to database
+    // Create file message in database
     const fileMessage = new messageModel({
       senderId,
       receiverId,
-      message: uploadResponse.url,
+      message: uploadResponse.url, // Store the file URL as message
       messageType: 'file',
       fileInfo: {
         fileName: req.file.originalname,
@@ -109,9 +228,8 @@ app.post("/user/upload-file", upload.single('file'), async (req, res) => {
     })
 
     await fileMessage.save()
-    console.log('File message saved to database')
 
-    // Create message data for socket emission
+    // Prepare message data for socket emission
     const messageData = {
       fromUser: senderId,
       toUser: receiverId,
@@ -120,88 +238,89 @@ app.post("/user/upload-file", upload.single('file'), async (req, res) => {
       fileInfo: {
         fileName: req.file.originalname,
         fileSize: req.file.size,
-        mimeType: req.file.mimetype
+        mimeType: req.file.mimetype,
+        imageKitFileId: uploadResponse.fileId
       },
-      timestamp: fileMessage.timeStamp
+      timestamp: new Date().toISOString()
     }
 
-    // Emit to specific users
+    // Emit to both sender and receiver via socket
     const allSockets = Array.from(io.sockets.sockets.values())
-    let emittedCount = 0
-    allSockets.forEach(s => {
-      if (s.username === senderId || s.username === receiverId) {
-        s.emit("private-message", messageData)
-        emittedCount++
+    allSockets.forEach(socket => {
+      if (socket.username === senderId || socket.username === receiverId) {
+        socket.emit("private-message", messageData)
       }
     })
 
-    console.log(`File message emitted to ${emittedCount} sockets`)
+    console.log(`📤 File message sent: ${req.file.originalname}`)
 
     res.json({
       success: true,
+      message: "File uploaded successfully",
       fileUrl: uploadResponse.url,
-      message: messageData
+      fileInfo: {
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype
+      }
     })
 
   } catch (error) {
-    console.error('File upload error:', error)
-    console.error('Error stack:', error.stack)
+    console.error('❌ File upload error:', error)
     
-    // More specific error handling
-    if (error.message && error.message.includes('ImageKit')) {
-      res.status(500).json({ error: 'Failed to upload to ImageKit', details: error.message })
-    } else if (error.name === 'ValidationError') {
-      res.status(400).json({ error: 'Database validation error', details: error.message })
-    } else {
-      res.status(500).json({ error: 'Failed to upload file', details: error.message })
+    if (error.message.includes('File size too large')) {
+      return res.status(413).json({ 
+        success: false, 
+        error: "File size exceeds 50MB limit" 
+      })
     }
+    
+    if (error.message.includes('Invalid file type')) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Only image and video files are allowed" 
+      })
+    }
+
+    res.status(500).json({ 
+      success: false, 
+      error: "File upload failed", 
+      details: error.message 
+    })
   }
 })
-
-// Get all registered users
-app.get("/user/all-users", async (req, res) => {
-  try {
-    const allUsers = await userModel.find({}, { name: 1, email: 1, _id: 0 })
-    const userList = allUsers.map(user => user.name)
-    res.json(userList)
-  } catch (error) {
-    console.error('Error fetching all users:', error)
-    res.status(500).json({ error: 'Failed to fetch users' })
-  }
-})
-
 // Chat history endpoint
-app.get("/user/messages", async (req, res) => {
-  try {
-    const { senderId, receiverId } = req.query
+// app.get("/user/messages", async (req, res) => {
+//   try {
+//     const { senderId, receiverId } = req.query
     
-    if (!senderId || !receiverId) {
-      return res.status(400).json({ error: "senderId and receiverId are required" })
-    }
+//     if (!senderId || !receiverId) {
+//       return res.status(400).json({ error: "senderId and receiverId are required" })
+//     }
 
-    const messages = await messageModel.find({
-      $or: [
-        { senderId, receiverId },
-        { senderId: receiverId, receiverId: senderId }
-      ]
-    }).sort({ timeStamp: 1 })
+//     const messages = await messageModel.find({
+//       $or: [
+//         { senderId, receiverId },
+//         { senderId: receiverId, receiverId: senderId }
+//       ]
+//     }).sort({ timeStamp: 1 })
 
-    // Format messages to match frontend expectations
-    const formattedMessages = messages.map(msg => ({
-      fromUser: msg.senderId,
-      toUser: msg.receiverId,
-      message: msg.message,
-      messageType: msg.messageType || 'text',
-      fileInfo: msg.fileInfo || null,
-      timestamp: msg.timeStamp
-    }))
+//     // Format messages to match frontend expectations
+//     const formattedMessages = messages.map(msg => ({
+//       fromUser: msg.senderId,
+//       toUser: msg.receiverId,
+//       message: msg.message,
+//       messageType: msg.messageType || 'text',
+//       fileInfo: msg.fileInfo || null,
+//       timestamp: msg.timeStamp
+//     }))
 
-    res.json(formattedMessages)
-  } catch (err) {
-    console.error('Error fetching messages:', err)
-    res.status(500).json({ error: 'Failed to fetch messages' })
-  }
-})
+//     res.json(formattedMessages)
+//   } catch (err) {
+//     console.error('Error fetching messages:', err)
+//     res.status(500).json({ error: 'Failed to fetch messages' })
+//   }
+// })
 
 // Get unread messages endpoint - MOVED OUTSIDE SOCKET HANDLER
 app.get("/user/unread-messages", async (req, res) => {
