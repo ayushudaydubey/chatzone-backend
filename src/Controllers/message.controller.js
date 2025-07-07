@@ -357,9 +357,8 @@ export const markMessagesAsReadController = async (req, res) => {
 // Save regular messages (for Socket.IO or HTTP)
 export const saveMessageController = async (req, res) => {
   try {
-    const { fromUser, toUser, message, timestamp, messageType = 'text', fileInfo, isAiBot = false } = req.body;
+    const { _id, fromUser, toUser, message, timestamp, messageType = 'text', fileInfo, isAiBot = false } = req.body;
     
-    // Validate required fields
     if (!fromUser || !toUser || !message) {
       return res.status(400).json({
         success: false,
@@ -367,14 +366,12 @@ export const saveMessageController = async (req, res) => {
       });
     }
 
-    // Create message data object with all required fields
+    // Use frontend-provided _id if available
     const messageData = {
-      // Required fields for schema validation
+      _id: _id || undefined, // Only set if provided
       senderId: fromUser,
       receiverId: toUser,
       message,
-      
-      // Optional/additional fields
       messageType,
       fileInfo: fileInfo || null,
       timestamp: timestamp ? new Date(timestamp) : new Date(),
@@ -382,13 +379,11 @@ export const saveMessageController = async (req, res) => {
       isAiBot,
       isError: false,
       isRead: false,
-      
-      // Backward compatibility fields
       fromUser,
       toUser
     };
 
-    // Save to database
+    // Save to database (Mongo will use _id if provided, else auto-generate)
     const savedMessage = await messageModel.create(messageData);
     
     res.status(201).json({
