@@ -117,7 +117,7 @@ app.get("/user/messages", async (req, res) => {
 
     res.json({
       success: true,
-      messages: formattedMessages  // ✅ Wrap in success object
+      messages: formattedMessages 
     })
 
   } catch (err) {
@@ -239,7 +239,8 @@ app.post("/user/upload-file", upload.single('file'), async (req, res) => {
         fileName: req.file.originalname,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
-        imageKitFileId: uploadResponse.fileId
+        imageKitFileId: uploadResponse.fileId,
+        fileUrl: uploadResponse.url
       },
       timestamp: new Date().toISOString()
     }
