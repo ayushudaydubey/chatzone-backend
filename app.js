@@ -57,7 +57,7 @@ app.use(cors({
 
 app.use(express.json())
 app.use(cookieParser())
-
+0
 // Home route
 app.get("/", (req, res) => {
   res.send("Home")

@@ -1,5 +1,6 @@
 import messageModel from "../Models/chat.models.js";
 import { generateAIResponse } from "../Services/ai.service.js";
+import mongoose from 'mongoose';
 
 // Save regular messages (HTTP endpoint)
 
@@ -31,19 +32,8 @@ export const messageController = async (req, res) => {
     }
 
     const now = timestamp ? new Date(timestamp) : new Date();
-    const messageId = `${fromUser}-${toUser}-${now.getTime()}-${message.slice(0, 50)}`;
-
-    const existingMessage = await messageModel.findOne({ _id: messageId });
-    if (existingMessage) {
-      return res.status(200).json({
-        success: true,
-        message: "Message already exists",
-        data: existingMessage
-      });
-    }
 
     const messageData = {
-      _id: messageId,
       senderId: fromUser,
       receiverId: toUser,
       fromUser,
@@ -414,5 +404,30 @@ export async function saveMessage(messageData) {
   } catch (error) {
     console.error("Error in saveMessage helper:", error.message, error.stack);
     throw error;
+  }
+}
+
+// Delete message by ID
+export const deleteMessageController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id; // From auth middleware
+    
+    // Validate message exists and belongs to user
+    const message = await messageModel.findById(id);
+    if (!message) {
+      return res.status(404).json({ success: false, error: 'Message not found' });
+    }
+    
+    if (message.fromUser !== userId) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    
+    // Delete the message
+    await messageModel.findByIdAndDelete(id);
+    
+    res.json({ success: true, message: 'Message deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 }

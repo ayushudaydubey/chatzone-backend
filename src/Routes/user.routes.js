@@ -16,7 +16,8 @@ import {
   getAiMessagesController,
   saveMessageController,
   markMessagesAsReadController,
-  getUnreadMessagesController
+  getUnreadMessagesController,
+  deleteMessageController
 } from '../Controllers/message.controller.js';
 
 import { aiChatController } from '../Services/ai.service.js';
@@ -50,5 +51,8 @@ routes.post("/save-message", verifyTokenMiddleware, saveMessageController);
 // Message Status Routes
 routes.post("/mark-read", verifyTokenMiddleware, markMessagesAsReadController);
 routes.get("/unread-messages", verifyTokenMiddleware, getUnreadMessagesController);
+
+// Delete Message Route
+routes.delete("/message/:id", deleteMessageController);
 
 export default routes;
