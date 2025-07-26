@@ -408,26 +408,26 @@ export async function saveMessage(messageData) {
 }
 
 // Delete message by ID
-export const deleteMessageController = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id; // From auth middleware
+// export const deleteMessageController = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const userId = req.user.id; // From auth middleware
     
-    // Validate message exists and belongs to user
-    const message = await messageModel.findById(id);
-    if (!message) {
-      return res.status(404).json({ success: false, error: 'Message not found' });
-    }
+//     // Validate message exists and belongs to user
+//     const message = await messageModel.findById(id);
+//     if (!message) {
+//       return res.status(404).json({ success: false, error: 'Message not found' });
+//     }
     
-    if (message.fromUser !== userId) {
-      return res.status(403).json({ success: false, error: 'Unauthorized' });
-    }
+//     if (message.fromUser !== userId) {
+//       return res.status(403).json({ success: false, error: 'Unauthorized' });
+//     }
     
-    // Delete the message
-    await messageModel.findByIdAndDelete(id);
+//     // Delete the message
+//     await messageModel.findByIdAndDelete(id);
     
-    res.json({ success: true, message: 'Message deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-}
+//     res.json({ success: true, message: 'Message deleted successfully' });
+//   } catch (error) {
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// }

@@ -176,42 +176,47 @@ export const logoutUserController = async (req, res) => {
 };
 
 // Middleware to Verify JWT Token from Cookie - ENHANCED ERROR HANDLING
+
+
+// Middleware to verify JWT token from cookie
+// src/Controllers/userController.js
+
+
 export async function verifyTokenMiddleware(req, res, next) {
   try {
-    const token = req.cookies['token'];
-    
-   
-    
+    const token = req.cookies?.token;
+
     if (!token) {
-      return res.status(401).json({ error: "Access denied. No token provided." });
+      return res.status(401).json({ success: false, error: 'Access denied: No token provided' });
     }
-    
-    const decoded = jwt.verify(token, process.env.SEC_KEY || "default_secret");
-    
-    // Check if user still exists in database
-    const user = await userModel.findById(decoded.id);
+
+    const decoded = jwt.verify(token, process.env.SEC_KEY || 'default_secret');
+    if (!decoded.id) {
+      return res.status(401).json({ success: false, error: 'Invalid token: Missing user ID' });
+    }
+
+    const user = await userModel.findById(decoded.id).select('_id name email username');
     if (!user) {
-      return res.status(401).json({ error: "User not found" });
+      return res.status(401).json({ success: false, error: 'User not found' });
     }
-    
-    // Add user info to request object - include username
+
     req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      name: decoded.name || user.name,
-      username: user.username // Add this line - get username from database
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name,
+      username: user.username || user.name
     };
-    
+
     next();
   } catch (err) {
-    console.error("Token verification error:", err); // Enhanced error logging
+    console.error('Token verification error:', err);
     if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: "Token expired" });
+      return res.status(401).json({ success: false, error: 'Token expired' });
     }
     if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ error: "Invalid token" });
+      return res.status(401).json({ success: false, error: 'Invalid token' });
     }
-    return res.status(401).json({ error: "Token verification failed" });
+    return res.status(401).json({ success: false, error: 'Authentication failed' });
   }
 }
 
