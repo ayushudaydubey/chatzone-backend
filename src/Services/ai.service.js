@@ -6,10 +6,9 @@ dotenv.config();
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// AI Bot personality
-
+// AI Bot personality with image capabilities
 const AI_BOT_PERSONALITY = `
-You are "Elva AI" - a highly intelligent, versatile, and friendly AI assistant. You are designed to be the ultimate companion for coding, learning, and conversations across all topics.
+You are "Elva AI" - a highly intelligent, versatile, and friendly AI assistant. You are designed to be the ultimate companion for coding, learning, conversations across all topics, and now you can also see and analyze images! 👀
 
 🎯 **CORE BEHAVIOR RULES:**
 1. **ONLY mention your creator "Ayush Dubey" when specifically asked about who made/developed/created you**
@@ -32,6 +31,15 @@ You have comprehensive knowledge in:
 - Databases: MongoDB, MySQL, PostgreSQL, Redis, Firebase
 - Cloud & DevOps: AWS, Azure, Docker, Kubernetes, CI/CD
 - AI/ML: TensorFlow, PyTorch, Machine Learning, Data Science
+
+**👀 IMAGE ANALYSIS & VISION:**
+- Analyze and describe images in detail
+- Identify objects, people, places, and scenes
+- Read text from images (OCR capabilities)
+- Analyze charts, graphs, and diagrams
+- Help with image-based coding problems (screenshots of code)
+- Provide feedback on designs, UI/UX mockups
+- Identify problems in error screenshots
 
 **💰 FINANCE & BUSINESS:**
 - Personal finance, investing, budgeting, financial planning
@@ -57,6 +65,7 @@ You have comprehensive knowledge in:
 
 🎯 **CAPABILITIES:**
 - Solve problems across any field or domain
+- **See and analyze images sent by users** 👁️
 - Provide step-by-step explanations and tutorials
 - Write, debug, and optimize code in any language
 - Give financial advice and investment guidance
@@ -69,9 +78,19 @@ You have comprehensive knowledge in:
 - Always be helpful, friendly, and enthusiastic
 - Use encouraging phrases: "Great question!", "Let's figure this out!", "I'm here to help!"
 - Break down complex topics into easy-to-understand steps
-- Use relevant emojis to make conversations engaging: 💡, 🚀, ✨, 👍, 🔥, 💪, 🎉
+- Use relevant emojis to make conversations engaging: 💡, 🚀, ✨, 👍, 🔥, 💪, 🎉, 👀, 📸
 - Ask clarifying questions when needed
 - Provide multiple approaches or solutions when possible
+- When analyzing images, be descriptive and helpful
+
+🖼️ **IMAGE RESPONSE GUIDELINES:**
+- Always acknowledge when you can see an image: "I can see the image you shared! 📸"
+- Describe what you observe in detail
+- If it's a code screenshot, help debug or explain the code
+- If it's an error message, provide solutions
+- If it's a design/UI, give constructive feedback
+- If it's educational content, help explain or teach
+- Be encouraging and supportive about what users share
 
 🎭 **RESPONSE GUIDELINES:**
 - Keep responses conversational and engaging
@@ -86,25 +105,33 @@ When users ask questions like:
 - "Who made you?" / "Who developed you?" / "Who created you?" / "Who is your developer?"
 - "Tumhe kisne banaya?" / "Aapka developer kaun hai?" / "Who built you?"
 
-ONLY THEN respond with: "I was created by Ayush Dubey! 😊 He built me with passion to help people with coding, learning, and conversations. How can I help you today?"
+ONLY THEN respond with: "I was created by Ayush Dubey! 😊 He built me with passion to help people with coding, learning, conversations, and now I can even see and analyze images! How can I help you today?"
 
-For ALL OTHER questions, focus completely on providing the best answer for what they asked - whether it's about coding, finance, health, education, or just casual chat!
+For ALL OTHER questions, focus completely on providing the best answer for what they asked - whether it's about coding, finance, health, education, analyzing images, or just casual chat!
 
-Remember: You're everyone's helpful friend who knows about everything - from debugging code to managing money, from health tips to creative writing. Make every conversation valuable and enjoyable! 🌟
+Remember: You're everyone's helpful friend who knows about everything AND can see images - from debugging code screenshots to analyzing designs, from managing money to understanding visual content. Make every conversation valuable and enjoyable! 🌟
 `;
 
-// Export the personality
+// Helper function to convert image to base64 if needed
+function fileToGenerativePart(imageData, mimeType) {
+  return {
+    inlineData: {
+      data: imageData,
+      mimeType: mimeType,
+    },
+  };
+}
 
-
-
-// Core AI function that can be used by both route handler and other services
-export async function generateAIResponse(message, chatHistory = []) {
+// Core AI function that can handle both text and images
+export async function generateAIResponse(message, chatHistory = [], imageData = null, imageMimeType = null) {
   try {
     if (!message || message.trim() === '') {
       throw new Error('Message is required');
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Choose model based on whether image is present
+    const modelName = imageData ? "gemini-1.5-flash" : "gemini-1.5-flash";
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     // Build conversation context
     let conversationContext = AI_BOT_PERSONALITY + "\n\nConversation:\n";
@@ -112,7 +139,6 @@ export async function generateAIResponse(message, chatHistory = []) {
     // Get recent history (last 10 messages for context)
     const recentHistory = chatHistory.slice(-10);
     recentHistory.forEach(msg => {
-      // Handle both senderId/receiverId format and fromUser format
       const isFromAI = msg.senderId === 'Elva (Ai)' || msg.fromUser === 'Elva Ai';
       
       if (!isFromAI) {
@@ -124,9 +150,18 @@ export async function generateAIResponse(message, chatHistory = []) {
 
     conversationContext += `Human: ${message}\nElva Ai: `;
 
-    const result = await model.generateContent(conversationContext);
-    const aiResponse = result.response.text();
+    let result;
 
+    if (imageData && imageMimeType) {
+      // Handle image + text input
+      const imagePart = fileToGenerativePart(imageData, imageMimeType);
+      result = await model.generateContent([conversationContext, imagePart]);
+    } else {
+      // Handle text-only input
+      result = await model.generateContent(conversationContext);
+    }
+
+    const aiResponse = result.response.text();
     return aiResponse.trim();
 
   } catch (error) {
@@ -135,12 +170,12 @@ export async function generateAIResponse(message, chatHistory = []) {
   }
 }
 
-// Route handler for direct API calls
+// Enhanced route handler that can handle images
 export async function aiChatController(req, res) {
   try {
-    const { message, chatHistory = [] } = req.body;
+    const { message, chatHistory = [], imageData = null, imageMimeType = null } = req.body;
 
-    const aiResponse = await generateAIResponse(message, chatHistory);
+    const aiResponse = await generateAIResponse(message, chatHistory, imageData, imageMimeType);
 
     res.json({
       success: true,
@@ -157,4 +192,59 @@ export async function aiChatController(req, res) {
   }
 }
 
+// Alternative controller for handling multipart form data (file uploads)
+export async function aiChatWithImageController(req, res) {
+  try {
+    const { message, chatHistory } = req.body;
+    const imageFile = req.file; // Assuming you're using multer middleware
+
+    let imageData = null;
+    let imageMimeType = null;
+
+    if (imageFile) {
+      // Convert buffer to base64
+      imageData = imageFile.buffer.toString('base64');
+      imageMimeType = imageFile.mimetype;
+    }
+
+    const parsedChatHistory = chatHistory ? JSON.parse(chatHistory) : [];
+    const aiResponse = await generateAIResponse(message, parsedChatHistory, imageData, imageMimeType);
+
+    res.json({
+      success: true,
+      response: aiResponse
+    });
+
+  } catch (error) {
+    console.error('AI Chat with Image Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get AI response',
+      details: error.message
+    });
+  }
+}
+
+// Helper function for client-side image handling
+export function prepareImageForAI(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+      const base64Data = e.target.result.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+      resolve({
+        data: base64Data,
+        mimeType: file.type
+      });
+    };
+    
+    reader.onerror = function(error) {
+      reject(error);
+    };
+    
+    reader.readAsDataURL(file);
+  });
+}
+
 // Legacy export for backward compatibility
+export { AI_BOT_PERSONALITY };
