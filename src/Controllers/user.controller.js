@@ -143,10 +143,10 @@ export const getMeController =  async(req, res) => {
   }
 }
 
-// Logout Controller
+
+
 export const logoutUserController = async (req, res) => {
   try {
-    // If user is authenticated, update their online status
     if (req.user?.id) {
       await userModel.findByIdAndUpdate(req.user.id, { 
         isOnline: false,
@@ -154,11 +154,10 @@ export const logoutUserController = async (req, res) => {
       });
     }
 
-    // Clear the HTTP-only cookie containing the JWT token - FIXED: Consistent settings
     res.clearCookie('token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/'
     });
 
@@ -167,19 +166,13 @@ export const logoutUserController = async (req, res) => {
       message: "Logged out successfully"
     });
   } catch (error) {
-    console.error("Logout error:", error);
+    console.error("Logout error:", error.message);
     res.status(500).json({
       success: false,
       error: "Logout failed"
     });
   }
 };
-
-// Middleware to Verify JWT Token from Cookie - ENHANCED ERROR HANDLING
-
-
-// Middleware to verify JWT token from cookie
-// src/Controllers/userController.js
 
 
 export async function verifyTokenMiddleware(req, res, next) {

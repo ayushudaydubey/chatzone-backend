@@ -27,7 +27,7 @@ const routes = express.Router();
 // Auth routes
 routes.post("/register", registerUserController);
 routes.post("/login", loginUserController);
-routes.post("/logout", verifyTokenMiddleware, logoutUserController);
+routes.post("/logout", logoutUserController);
 
 // Protected routes
 routes.post("/chat", verifyTokenMiddleware, messageController);

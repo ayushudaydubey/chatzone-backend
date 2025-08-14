@@ -1,10 +1,12 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv'
+import { GoogleGenAI } from "@google/genai";
+import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize Gemini AI with the new syntax
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY
+});
 
 // AI Bot personality with image capabilities
 const AI_BOT_PERSONALITY = `
@@ -122,16 +124,12 @@ function fileToGenerativePart(imageData, mimeType) {
   };
 }
 
-// Core AI function that can handle both text and images
+// Core AI function that can handle both text and images (UPDATED SYNTAX)
 export async function generateAIResponse(message, chatHistory = [], imageData = null, imageMimeType = null) {
   try {
     if (!message || message.trim() === '') {
       throw new Error('Message is required');
     }
-
-    // Choose model based on whether image is present
-    const modelName = imageData ? "gemini-1.5-flash" : "gemini-1.5-flash";
-    const model = genAI.getGenerativeModel({ model: modelName });
 
     // Build conversation context
     let conversationContext = AI_BOT_PERSONALITY + "\n\nConversation:\n";
@@ -150,18 +148,22 @@ export async function generateAIResponse(message, chatHistory = [], imageData = 
 
     conversationContext += `Human: ${message}\nElva Ai: `;
 
-    let result;
-
+    // NEW SYNTAX: Use the new GoogleGenAI structure
+    let contents = [conversationContext];
+    
     if (imageData && imageMimeType) {
-      // Handle image + text input
+      // Add image to contents for vision capabilities
       const imagePart = fileToGenerativePart(imageData, imageMimeType);
-      result = await model.generateContent([conversationContext, imagePart]);
-    } else {
-      // Handle text-only input
-      result = await model.generateContent(conversationContext);
+      contents.push(imagePart);
     }
 
-    const aiResponse = result.response.text();
+    // NEW SYNTAX: Use ai.models.generateContent instead of getGenerativeModel
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash", // Updated to use the latest model
+      contents: contents
+    });
+
+    const aiResponse = response.text;
     return aiResponse.trim();
 
   } catch (error) {
@@ -170,7 +172,7 @@ export async function generateAIResponse(message, chatHistory = [], imageData = 
   }
 }
 
-// Enhanced route handler that can handle images
+// Enhanced route handler that can handle images (UPDATED)
 export async function aiChatController(req, res) {
   try {
     const { message, chatHistory = [], imageData = null, imageMimeType = null } = req.body;
@@ -192,7 +194,7 @@ export async function aiChatController(req, res) {
   }
 }
 
-// Alternative controller for handling multipart form data (file uploads)
+// Alternative controller for handling multipart form data (file uploads) (UPDATED)
 export async function aiChatWithImageController(req, res) {
   try {
     const { message, chatHistory } = req.body;
@@ -246,5 +248,20 @@ export function prepareImageForAI(file) {
   });
 }
 
+// Simple example function using the new syntax
+async function simpleAIExample() {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: "Explain how AI works in a few words",
+    });
+    
+    console.log(response.text);
+    return response.text;
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+
 // Legacy export for backward compatibility
-export { AI_BOT_PERSONALITY };
+export { AI_BOT_PERSONALITY, simpleAIExample };
