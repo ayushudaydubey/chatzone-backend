@@ -61,19 +61,6 @@ app.use(cors({
   exposedHeaders: ["*", "Authorization"]
 }));
 
-// Socket.IO CORS config - Update this as well
-const io = new Server(server, {
-  cors: {
-    origin: [
-      'http://localhost:5173',
-      'https://chatzone-frontend.vercel.app'  // Add your Vercel frontend URL
-    ],
-    methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"]
-  }
-});
-
 // Middleware
 app.use(express.json())
 app.use(cookieParser())
