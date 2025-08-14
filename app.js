@@ -49,12 +49,32 @@ const upload = multer({
   }
 })
 
-// CORS setup
+// CORS setup - Update with proper production URL
 app.use(cors({
-  origin: ['http://localhost:5173','https://chatzone-frontend.vercel.app/'],
-  credentials: true
-}))
+  origin: [
+    'http://localhost:5173',
+    'https://chatzone-frontend.vercel.app'  // Add your Vercel frontend URL
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-csrf-token"],
+  exposedHeaders: ["*", "Authorization"]
+}));
 
+// Socket.IO CORS config - Update this as well
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      'https://chatzone-frontend.vercel.app'  // Add your Vercel frontend URL
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
+  }
+});
+
+// Middleware
 app.use(express.json())
 app.use(cookieParser())
 
